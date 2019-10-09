@@ -336,10 +336,9 @@ describe('RFC5424 Class Tests', () => {
     });
     result = rfc5424.buildMessage('hello', {
       msgColor: 30,
-      msgStructuredData: [
-        '[ourSDID@32473 test=test]',
-        '[ourSDID@32473 test=test]'
-      ]
+      structuredData: {
+        'ourSDID@32473': { test: 'test' }
+      }
     });
     resultMsg = /<190>1 \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{1,3} /;
     expect(result).toMatch(resultMsg);
@@ -416,6 +415,23 @@ describe('RFC5424 Class Tests', () => {
       applicationName: 'applicationName'
     });
     expect(result).toMatch(/^<190>1 \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{1,3}[\+\-]\d{2}:\d{2} hostname applicationName - - - BOMhello\n$/);
+  });
+  test('RFC5424 BuildMessage with structredData option', () => {
+    const rfc5424 = new SyslogPro.RFC5424();
+    const result = rfc5424.buildMessage('hello', {
+      structuredData: {
+        "hi@32473": {
+          foo: 1,
+          bar: 2
+        },
+        escape: {
+          quoteCharacter: '"',
+          backslack: '\\',
+          closingBrace: ']'
+        }
+      }
+    });
+    expect(result).toMatch(/^<190>1 \S+ \S+ - - - \[hi@32473 foo="1" bar="2"\]\[escape quoteCharacter="\\"" backslack="\\\\" closingBrace="\\]"\] BOMhello\n$/);
   });
   test('RFC5424 SetColors', () => {
     let rfc5424 = new SyslogPro.RFC5424();
