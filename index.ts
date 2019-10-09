@@ -1082,7 +1082,7 @@ export class RFC5424 extends RFC {
     super();
     options = options || {};
     this.hostname = options.hostname || os.hostname();
-    this.applicationName = options.applicationName || '';
+    this.applicationName = options.applicationName || '-';
     this.timestamp = options.timestamp !== false;
     this.timestampMS = options.timestampMS !== false;
     this.timestampTZ = options.timestampTZ !== false;
@@ -1154,8 +1154,8 @@ export class RFC5424 extends RFC {
    *    message
    * @param {string} [options.pid='-'] - The process id of the service sending
    *    this message
-   * @param {string[]} [options.structuredData] - An array of structure
-   *    data strings conforming to the IETF/IANA defined SD-IDs or IANA
+   * @param {object} [options.structuredData] - An object of structure
+   *    data objects conforming to the IETF/IANA defined SD-IDs or IANA
    *    registered SMI Network Management Private Enterprise Code SD-ID
    *    conforming to the format
    *    [name@<private enterprise number> parameter=value]
@@ -1181,7 +1181,6 @@ export class RFC5424 extends RFC {
     let applicationName = options.applicationName || this.applicationName;
     let pid = options.pid || '-';
     let id = options.id || '-';
-    let msgStructuredData = options.msgStructuredData || [];
     let fmtMsg = ''; // Formated Syslog message string var
     const newLine = '\n';
     const newLineRegEx = /(\r|\n|(\r\n))/;
@@ -1251,26 +1250,7 @@ export class RFC5424 extends RFC {
       }
     }
     // Build Structured Data string
-    let structuredData = '-';
-    const sdElementCount = msgStructuredData.length;
-    if (sdElementCount > 0) {
-      let sdElementNames = [];
-      let sdElements = [];
-      const sdElementNameRegEx = /(\[)(\S*)(\s|\])/;
-      // Loop to drop duplicates of the same SD Element name
-      for (let elementIndex = 0;
-        elementIndex < sdElementCount;
-        elementIndex++) {
-        let elementName =
-          msgStructuredData[elementIndex]
-            .match(sdElementNameRegEx)[2];
-        if (!sdElementNames.includes(elementName)) {
-          sdElementNames.push(elementName);
-          sdElements.push(msgStructuredData[elementIndex]);
-        }
-      }
-      structuredData = sdElements.join('');
-    }
+    const structuredData = RFC5424.buildStructuredData(options.structuredData);
     // Build the message
     fmtMsg = '<' + pri + '>';
     fmtMsg += '1'; // Version number
@@ -1287,6 +1267,28 @@ export class RFC5424 extends RFC {
     }
     fmtMsg += newLine;
     return fmtMsg;
+  }
+  static buildStructuredData(data) {
+    // Build Structured Data string
+    let result;
+    if (data) {
+      result = Object.entries(data).map(([sdId, sdParam]) => {
+        return '[' + [
+          sdId,
+          ...Object.entries(sdParam)
+            .map(([name, value]) =>
+              `${name}="${RFC5424.escapeParamValue(value)}"`
+            ),
+        ].join(' ') + ']';
+      }).join('');
+    }
+    return result || '-';
+  }
+  static escapeParamValue(value) {
+    return String(value)
+      .replace(/\\/g, '\\\\')
+      .replace(/"/g, '\\\"')
+      .replace(/]/g, '\\]');
   }
   /**
    * send a RFC5424 formatted message.  Returns a promise with the formatted
