@@ -4,88 +4,96 @@ const udp = require('dgram');
 const net = require('net');
 const tls = require('tls');
 const fs = require('fs');
-const dns = require('dns');
-let dnsPromises = dns.promises;
+
+const noop = () => {};
+let udpServer;
+let tcpServer;;
+let tlsBasicServer;
+let tlsAuthServer;
 
 function setupServers () {
-  return new Promise ((resolve, reject) => {
-    // Load a UDP server
-    // global.udpServerPort = 8000;
-    this.udpServer = udp.createSocket('udp4');
-    this.udpServer.bind(global.udpServerPort, () => {
-      // console.log('UDP server running on', global.udpServerPort);
-    });
-    
-    // Load a TCP server
-    // global.tcpServerPort = 8001;
-    this.tcpServer = net.createServer((socket) => {
-      socket.on('data', function (data) {});
-      socket.on('end', function () {});
-    });
-    this.tcpServer.listen(global.tcpServerPort, () => {
-      // console.log('TCP server running on', global.tcpServerPort);
-    });
-    
-    // Load a basic TLS 
-    // global.tlsBasicServerPort = 8002;
-    const tlsBasicServerOptions = {
-      key: fs.readFileSync('./tests/jest_test_server_key.pem'),
-      cert: fs.readFileSync('./tests/jest_test_server_cert.pem'),
-      handshakeTimeout: 100,
-      requestCert: false,
-      rejectUnauthorized: false
-    };
-    this.tlsBasicServer = tls.createServer(tlsBasicServerOptions, (socket) => {
-      socket.on('data', function (data) {});
-      socket.on('end', function() {}); 
-    });
-    this.tlsBasicServer.listen(global.tlsBasicServerPort, () => {
-      // console.log('TLS basic server running on', global.tlsBasicServerPort);
-    });
-    
-    // Load a TLS server with client Cert request
-    // global.tlsAuthServerPort = 8003;
-    const tlsAuthServerOptions = {
-      key: fs.readFileSync('./tests/jest_test_server_key.pem'),
-      cert: fs.readFileSync('./tests/jest_test_server_cert.pem'),
-      ca: [ fs.readFileSync('./tests/jest_test_client_cert.pem') ],
-      handshakeTimeout: 100,
-      requestCert: true,
-      rejectUnauthorized: true
-    };
-    this.tlsAuthServer = tls.createServer(tlsAuthServerOptions, (socket) => {
-      socket.on('data', function (data) {});
-      socket.on('end', function() {}); 
-    });
-    this.tlsAuthServer.listen(global.tlsAuthServerPort, () => {
-      // console.log('TLS auth server running on', global.tlsAuthServerPort);
-    });
-  });
+  return Promise.all([
+    new Promise ((resolve, reject) => {
+      // Load a UDP server
+      // global.udpServerPort = 8000;
+      udpServer = udp.createSocket('udp6');
+      udpServer.bind(global.udpServerPort, resolve);
+      udpServer.on('error', reject);
+    }),
+
+    new Promise ((resolve, reject) => {
+      // Load a TCP server
+      // global.tcpServerPort = 8001;
+      tcpServer = net.createServer((socket) => {
+        socket.on('data', function (data) {});
+        socket.on('end', function () {});
+      });
+      tcpServer.listen(global.tcpServerPort, resolve);
+      tcpServer.on('error', reject);
+    }),
+
+    new Promise ((resolve, reject) => {
+      // Load a basic TLS
+      // global.tlsBasicServerPort = 8002;
+      const tlsBasicServerOptions = {
+        key: fs.readFileSync('./tests/jest_test_server_key.pem'),
+        cert: fs.readFileSync('./tests/jest_test_server_cert.pem'),
+        handshakeTimeout: 100,
+        requestCert: false,
+        rejectUnauthorized: false
+      };
+      tlsBasicServer = tls.createServer(tlsBasicServerOptions, (socket) => {
+        socket.on('data', function (data) {});
+        socket.on('end', function() {});
+      });
+      tlsBasicServer.listen(global.tlsBasicServerPort, resolve);
+      tlsBasicServer.on('error', reject);
+    }),
+
+    new Promise ((resolve, reject) => {
+      // Load a TLS server with client Cert request
+      // global.tlsAuthServerPort = 8003;
+      const tlsAuthServerOptions = {
+        key: fs.readFileSync('./tests/jest_test_server_key.pem'),
+        cert: fs.readFileSync('./tests/jest_test_server_cert.pem'),
+        ca: [ fs.readFileSync('./tests/jest_test_client_cert.pem') ],
+        handshakeTimeout: 100,
+        requestCert: true,
+        rejectUnauthorized: true
+      };
+      tlsAuthServer = tls.createServer(tlsAuthServerOptions, (socket) => {
+        socket.on('data', function (data) {});
+        socket.on('end', function() {});
+      });
+      tlsAuthServer.listen(global.tlsAuthServerPort, resolve);
+      tlsAuthServer.on('error', reject);
+    })
+  ]);
 }
 
 function teardownServers() {
-  return new Promise ((resolve, reject) => {
-    this.udpServer.close(() => {
-      // console.log('UDP server closed');
-    });
-    this.tcpServer.close(() => {
-      // console.log('TCP server closed');
-    });
-    this.tlsBasicServer.close(() => {
-      // console.log('TLS basic server closed');
-    });
-    this.tlsAuthServer.close(() => {
-      // console.log('TLS auth server closed');
-    });
-  });
+  return Promise.all([
+    new Promise((resolve) => {
+      udpServer.close(resolve);
+    }),
+    new Promise((resolve) => {
+      tcpServer.close(resolve);
+    }),
+    new Promise((resolve) => {
+      tlsBasicServer.close(resolve);
+    }),
+    new Promise((resolve) => {
+      tlsAuthServer.close(resolve);
+    })
+  ]);
 }
 
-beforeAll(() => {
-  setupServers().then((result => {}));
+beforeAll(async () => {
+  await setupServers();
 });
 
-afterAll(() => {
-  teardownServers().then((result => {}));
+afterAll(async () => {
+  await teardownServers();
 });
 
 // CEF Class Tests
@@ -154,14 +162,16 @@ describe('CEF Class Tests', () => {
       {
         extensions: {
           deviceAction: 'block'
+        },
+        server: {
+          target: '::1',
+          port:global.udpServerPort
         }
       }
     );
     let result = cef.validate();
-    result = await cef.send({
-      target: '::1',
-      port:global.udpServerPort
-    });
+    result = await cef.send();
+    await cef.close();
     let validateMsg = 'CEF:0|Unknown|Unknown|Unknown|Unknown|Unknown';
     validateMsg += '|Unknown|deviceAction=block ';
     expect(result).toBe(validateMsg);
@@ -175,9 +185,10 @@ describe('CEF Class Tests', () => {
     let cef = new SyslogPro.CEF({
       server: syslog
     });
+    syslog.on('error', noop);
     expect.assertions(1);
     try {
-      await cef.send({});
+      await cef.send();
     } catch (reason) {
       expect(reason.message).toBe('connect ECONNREFUSED 127.0.0.1:8101');
     }
@@ -203,6 +214,7 @@ describe('LEEF Class Tests', () => {
       },
       server: syslog
     });
+    syslog.on('error', noop);
     expect.assertions(1);
     try {
       await leef.send();
@@ -213,6 +225,7 @@ describe('LEEF Class Tests', () => {
   test('LEEF Send', async () => {
     let leef = new SyslogPro.LEEF();
     const result = await leef.send();
+    await leef.close();
     expect(result).toBe('LEEF:2.0|unknown|unknown|unknown|unknown|');
   });
   test('LEEF Send with Auth TLS options', async () => {
@@ -228,6 +241,7 @@ describe('LEEF Class Tests', () => {
     });
     expect.assertions(1);
     const result = await leef.send();
+    await leef.close();
     expect(result).toBe('LEEF:2.0|unknown|unknown|unknown|unknown|');
   });
 });
@@ -235,32 +249,46 @@ describe('LEEF Class Tests', () => {
 // RFC5424 Class Test
 describe('RFC5424 Class Tests', () => {
   test('RFC5424 Sending critical - debug Severity Messages', async () => {
-    let rfc5424 = new SyslogPro.RFC5424();
-    let result = await rfc5424.debug('test')
-    expect(result).toMatch(/<191>1 /);
-    result = await rfc5424.log('test');
-    expect(result).toMatch(/<190>1 /);
-    result = await rfc5424.info('test');
-    expect(result).toMatch(/<190>1 /);
-    result = await rfc5424.note('test');
-    expect(result).toMatch(/<189>1 /);
-    result = await rfc5424.warn('test');
-    expect(result).toMatch(/<188>1 /);
-    result = await rfc5424.err('test');
-    expect(result).toMatch(/<187>1 /);
-    result = await rfc5424.crit('test');
-    expect(result).toMatch(/<186>1 /);
+    const rfc5424 = new SyslogPro.RFC5424({
+      server: {
+        port: global.udpServerPort
+      }
+    });
+    try {
+      let result = await rfc5424.debug('test')
+      expect(result).toMatch(/<191>1 /);
+      result = await rfc5424.log('test');
+      expect(result).toMatch(/<190>1 /);
+      result = await rfc5424.info('test');
+      expect(result).toMatch(/<190>1 /);
+      result = await rfc5424.note('test');
+      expect(result).toMatch(/<189>1 /);
+      result = await rfc5424.warn('test');
+      expect(result).toMatch(/<188>1 /);
+      result = await rfc5424.err('test');
+      expect(result).toMatch(/<187>1 /);
+      result = await rfc5424.crit('test');
+      expect(result).toMatch(/<186>1 /);
+    } finally {
+      await rfc5424.close();
+    }
   });
   test('RFC5424 Sending emergency - alert Severity Messages', async () => {
-    let syslog = new SyslogPro.Syslog();
+    let syslog = new SyslogPro.Syslog({
+      port: global.udpServerPort
+    });
     let rfc5424 = new SyslogPro.RFC5424({
       server: syslog
     });
     expect.assertions(2);
-    let result = await rfc5424.alert('test')
-    expect(result).toMatch(/<185>1 /);
-    result = await rfc5424.emer('test')
-    expect(result).toMatch(/<184>1 /);
+    try {
+      let result = await rfc5424.alert('test')
+      expect(result).toMatch(/<185>1 /);
+      result = await rfc5424.emer('test')
+      expect(result).toMatch(/<184>1 /);
+    } finally {
+      await rfc5424.close();
+    }
   });
   test('RFC5424 Send with a bad message type ERROR', async () => {
     let rfc5424 = new SyslogPro.RFC5424();
@@ -295,6 +323,7 @@ describe('RFC5424 Class Tests', () => {
         protocol: 'tcp'
       }
     });
+    rfc5424.server.on('error', noop);
     expect.assertions(1);
     try {
       await rfc5424.send('hello');
@@ -552,22 +581,30 @@ describe('RFC5424 Class Tests', () => {
 // RFC3164 Class Test
 describe('RFC3164 Class Tests', () => {
   test('RFC3164 Sending critical - debug Severity Messages', async () => {
-    let rfc3164 = new SyslogPro.RFC3164();
+    let rfc3164 = new SyslogPro.RFC3164({
+      server: {
+        port: global.udpServerPort
+      }
+    });
     expect.assertions(7);
-    let result = await rfc3164.debug('test');
-    expect(result).toMatch(/<191>J|F|M|A|S|O|N|D/);
-    result = await rfc3164.log('test');
-    expect(result).toMatch(/<190>J|F|M|A|S|O|N|D/);
-    result = await rfc3164.info('test');
-    expect(result).toMatch(/<190>J|F|M|A|S|O|N|D/);
-    result = await rfc3164.note('test');
-    expect(result).toMatch(/<189>J|F|M|A|S|O|N|D/);
-    result = await rfc3164.warn('test');
-    expect(result).toMatch(/<188>J|F|M|A|S|O|N|D/);
-    result = await rfc3164.err('test');
-    expect(result).toMatch(/<187>J|F|M|A|S|O|N|D/);
-    result = await rfc3164.crit('test')
-    expect(result).toMatch(/<186>J|F|M|A|S|O|N|D/);
+    try {
+      let result = await rfc3164.debug('test');
+      expect(result).toMatch(/<191>J|F|M|A|S|O|N|D/);
+      result = await rfc3164.log('test');
+      expect(result).toMatch(/<190>J|F|M|A|S|O|N|D/);
+      result = await rfc3164.info('test');
+      expect(result).toMatch(/<190>J|F|M|A|S|O|N|D/);
+      result = await rfc3164.note('test');
+      expect(result).toMatch(/<189>J|F|M|A|S|O|N|D/);
+      result = await rfc3164.warn('test');
+      expect(result).toMatch(/<188>J|F|M|A|S|O|N|D/);
+      result = await rfc3164.err('test');
+      expect(result).toMatch(/<187>J|F|M|A|S|O|N|D/);
+      result = await rfc3164.crit('test')
+      expect(result).toMatch(/<186>J|F|M|A|S|O|N|D/);
+    } finally {
+      await rfc3164.close();
+    }
   });
   test('RFC3164 Sending TCP emergency - alert Severity Messages', async () => {
     let syslog = new SyslogPro.Syslog({
@@ -577,10 +614,14 @@ describe('RFC3164 Class Tests', () => {
     let rfc3164 = new SyslogPro.RFC3164({
       server: syslog
     });
-    let result = await rfc3164.alert('test');
-    expect(result).toMatch(/<185>J|F|M|A|S|O|N|D/);
-    result = await rfc3164.emer('test');
-    expect(result).toMatch(/<184>J|F|M|A|S|O|N|D/);
+    try {
+      let result = await rfc3164.alert('test');
+      expect(result).toMatch(/<185>J|F|M|A|S|O|N|D/);
+      result = await rfc3164.emer('test');
+      expect(result).toMatch(/<184>J|F|M|A|S|O|N|D/);
+    } finally {
+      await rfc3164.close();
+    }
   });
   test('RFC3164 Send with a bad message type ERROR', async () => {
     let rfc3164 = new SyslogPro.RFC3164();
@@ -611,6 +652,7 @@ describe('RFC3164 Class Tests', () => {
         protocol: 'tcp'
       }
     });
+    rfc3164.server.on('error', noop);
     expect.assertions(1);
     try {
       await rfc3164.send('hello');
@@ -760,11 +802,14 @@ describe('Base Syslog Class tests', () => {
       protocol: 'udp',
       port: global.udpServerPort
     });
+    syslog.on('error', noop);
     expect.assertions(1);
     try {
       await syslog.send('test');
     } catch(reason) {
       expect(reason.message).toBe('getaddrinfo ENOTFOUND noteareal.dns');
+    } finally {
+      await syslog.close();
     }
   });
   test('Syslog Send UDP with bad message type Error', async () => {
@@ -788,6 +833,7 @@ describe('Base Syslog Class tests', () => {
       port: global.udpServerPort
     });
     const result = await syslog.send('test');
+    await syslog.close();
     expect(result).toBe('test');
   });
   test('Syslog Send TLS with timeout Error', async () => {
@@ -861,6 +907,7 @@ describe('Base Syslog Class tests', () => {
       target: 'cloud.positon.org',  // Public test server
     });
     const result = await syslog.send('test');
+    await syslog.close();
     expect(result).toBe('test');
   });
   test('Syslog Send TLS without rejectUnauthorized', async () => {
@@ -870,6 +917,7 @@ describe('Base Syslog Class tests', () => {
       rejectUnauthorized: false
     });
     const result = await syslog.send('test');
+    await syslog.close();
     expect(result).toBe('test');
   });
   test('Syslog Send TCP with DNS Error', async () => {
@@ -879,6 +927,7 @@ describe('Base Syslog Class tests', () => {
       port: global.tcpServerPort
     });
     expect.assertions(1);
+    syslog.on('error', noop);
     try {
       await syslog.send('test');
     } catch(reason) {
