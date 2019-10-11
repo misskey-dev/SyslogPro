@@ -362,7 +362,6 @@ export class Syslog extends EventEmitter {
       this.tcpSocketPromise = this.tcpConnect();
     }
     const socket = await this.tcpSocketPromise;
-    this.tcpSocketPromise = Promise.resolve(socket);
     return new Promise((resolve, reject) => {
       const removeListeners = () => {
         socket.off('error', onceError);
@@ -441,7 +440,6 @@ export class Syslog extends EventEmitter {
       this.tlsSocketPromise = this.tlsConnect();
     }
     const socket = await this.tlsSocketPromise;
-    this.tlsSocketPromise = Promise.resolve(socket);
     return new Promise((resolve, reject) => {
       const removeListeners = () => {
         socket.off('error', onceError);
@@ -773,6 +771,7 @@ type RFC3164Options = {
   extendedColor?: boolean;
   facility?: number;
   hostname?: string;
+  octetCounting?: boolean;
   server?: Syslog | SyslogOptions;
 };
 
@@ -797,6 +796,7 @@ export class RFC3164 extends RFC {
   color: boolean;
   facility: number;
   hostname: string;
+  octetCounting: boolean;
   /**
    * Construct a new RFC3164 formatted Syslog object with user options
    * @public
@@ -863,6 +863,11 @@ export class RFC3164 extends RFC {
       this.server = options.server;
     } else {
       this.server = new Syslog(options.server);
+    }
+    if (this.server.protocol === 'tcp' || this.server.protocol === 'tls') {
+      this.octetCounting = options.octetCounting !== false;
+    } else {
+      this.octetCounting = false;
     }
     if (this.extendedColor) {
       /** @private @type {number} */
@@ -957,8 +962,9 @@ export class RFC3164 extends RFC {
     fmtMsg += ' ' + hostname;
     fmtMsg += ' ' + applicationName;
     fmtMsg += ' ' + msg;
-    fmtMsg += newLine;
-    return fmtMsg;
+    return this.octetCounting
+      ? `${Buffer.byteLength(fmtMsg)} ${fmtMsg}`
+      : fmtMsg + newLine;
   }
   /**
    * send a RFC5424 formatted message.  Returns a promise with the formatted
@@ -1171,6 +1177,7 @@ type RFC5424Options = {
   };
   extendedColor?: boolean;
   hostname?: string;
+  octetCounting?: boolean;
   server?: Syslog | SyslogOptions;
   timestamp?: boolean;
   timestampMS?: boolean;
@@ -1199,6 +1206,7 @@ export class RFC5424 extends RFC {
   applicationName: string;
   color: boolean;
   hostname: string;
+  octetCounting: boolean;
   timestamp: boolean;
   timestampMS: boolean;
   timestampTZ: boolean;
@@ -1284,6 +1292,11 @@ export class RFC5424 extends RFC {
       this.server = options.server;
     } else {
       this.server = new Syslog(options.server);
+    }
+    if (this.server.protocol === 'tcp' || this.server.protocol === 'tls') {
+      this.octetCounting = options.octetCounting !== false;
+    } else {
+      this.octetCounting = false;
     }
     if (this.extendedColor) {
       /** @private @type {number} */
@@ -1437,8 +1450,9 @@ export class RFC5424 extends RFC {
     } else {
       fmtMsg += ' ' + msg;
     }
-    fmtMsg += newLine;
-    return fmtMsg;
+    return this.octetCounting
+      ? `${Buffer.byteLength(fmtMsg)} ${fmtMsg}`
+      : fmtMsg + newLine;
   }
   static buildStructuredData(data) {
     // Build Structured Data string
