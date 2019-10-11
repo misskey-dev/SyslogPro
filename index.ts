@@ -925,13 +925,10 @@ export class RFC3164 extends RFC {
     }
     let fmtMsg = ''; // Formatted Syslog message string var
     const newLine = '\n';
-    const newLineRegEx = /(\r|\n|(\r\n))/;
     const escapeCode = '\u001B';
     const resetColor = '\u001B[0m';
     // The PRI is common to both RFC formats
     const pri = (this.facility * 8) + severity;
-    // Remove any newline character
-    msg = msg.replace(newLineRegEx, '');
     // Add requested color
     if (this.color) {
       options.msgColor = options.msgColor || 36;
@@ -1368,13 +1365,10 @@ export class RFC5424 extends RFC {
     let id = options.id || '-';
     let fmtMsg = ''; // Formated Syslog message string var
     const newLine = '\n';
-    const newLineRegEx = /(\r|\n|(\r\n))/;
     const escapeCode = '\u001B';
     const resetColor = '\u001B[0m';
     // The PRI is common to both RFC formats
     const pri = (facility * 8) + severity;
-    // Remove any newline character
-    msg = msg.replace(newLineRegEx, '');
     // Add requested color
     if (this.color) {
       options.msgColor = options.msgColor || 36;
