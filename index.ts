@@ -16,9 +16,12 @@
  * @exports CEF
  * @module SyslogPro
  */
+import EventEmitter from 'events';
 import moment from 'moment';
-import * as os from 'os';
+import * as dgram from 'dgram'; // eslint-disable-line no-unused-vars
 import * as dns from 'dns';
+import * as net from 'net'; // eslint-disable-line no-unused-vars
+import * as os from 'os';
 import * as tls from 'tls'; // eslint-disable-line no-unused-vars
 let dnsPromises = dns.promises;
 
@@ -114,7 +117,7 @@ type SyslogOptions = {
  * @version 0.0.0
  * @since 0.0.0
  */
-export class Syslog {
+export class Syslog extends EventEmitter {
   cef: any;
   format: string;
   leef: any;
@@ -124,10 +127,13 @@ export class Syslog {
   rfc3164: any;
   rfc5424: any;
   target: string;
+  tcpSocketPromise: Promise<net.Socket> | null;
   tcpTimeout: number;
   tlsServerCerts: (Buffer | string)[];
   tlsClientCert: Buffer | string;
   tlsClientKey: Buffer | string;
+  tlsSocketPromise: Promise<tls.TLSSocket> | null;
+  udpSocketPromise: Promise<dgram.Socket> | null;
   /**
    * Construct a new Syslog transport object with user options
    * @public
@@ -171,6 +177,7 @@ export class Syslog {
    *    (Common Event Format) formatting object}
    */
   constructor(options?: SyslogOptions) {
+    super();
     if (!options) {
       options = {};
     }
@@ -181,7 +188,21 @@ export class Syslog {
     this.protocol = options.protocol || 'udp';
     this.protocol = this.protocol.toLowerCase();
     /** @type {number} */
-    this.port = options.port || 514;
+    this.port = options.port;
+    if (!this.port) {
+      // defaut port defined on https://tools.ietf.org/html/rfc3195
+      // and https://tools.ietf.org/html/rfc5425
+      if (this.protocol === 'udp') {
+        this.port = 514;
+      } else if (this.protocol === 'tcp') {
+        this.port = 601;
+      } else {
+        this.port = 6514;
+      }
+    }
+    this.tcpSocketPromise = null;
+    this.tlsSocketPromise = null;
+    this.udpSocketPromise = null;
     /** @type {number} */
     this.tcpTimeout = options.tcpTimeout || 10000;
     if (Array.isArray(options.tlsServerCerts)
@@ -286,6 +307,23 @@ export class Syslog {
    * @throws {Error} - Network Error
    */
   async udpMessage(msg) {
+    if (!this.udpSocketPromise) {
+      this.udpSocketPromise = this.udpConnect();
+    }
+    const socket = await this.udpSocketPromise;
+    return new Promise((resolve, reject) => {
+      // @ts-ignore
+      socket.send(msg, (err) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(msg);
+        }
+      });
+    });
+  }
+
+  async udpConnect(): Promise<dgram.Socket> {
     // Test for target DNS and Address Family (IPv4/6) by looking up the DNS
     const dgram = require('dgram');
     const dnsOptions = {
@@ -293,16 +331,24 @@ export class Syslog {
     };
     const result = await dnsPromises.lookup(this.target, dnsOptions);
     const udpType = result.family === 4 ? 'udp4' : 'udp6';
-    let client = dgram.createSocket(udpType);
-    // Turn msg in to a UTF8 buffer
-    let msgBuffer = Buffer.from(msg, 'utf8');
-    return new Promise((resolve) => {
-      client.send(msgBuffer, this.port, this.target, () => {
-        client.close();
-        resolve(msg);
+    const socket = dgram.createSocket(udpType);
+    socket.on('close', () => {
+      this.onClose();
+    });
+    socket.on('error', (error) => {
+      this.emit('error', error);
+    });
+    return new Promise((resolve, reject) => {
+      socket.connect(this.port, this.target, (err) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(socket);
+        }
       });
     });
   }
+
   /**
    * Send the Syslog message over TCP
    * @private
@@ -312,38 +358,76 @@ export class Syslog {
    * @throws {Error} - Network Error
    */
   async tcpMessage(msg) {
+    if (!this.tcpSocketPromise) {
+      this.tcpSocketPromise = this.tcpConnect();
+    }
+    const socket = await this.tcpSocketPromise;
+    this.tcpSocketPromise = Promise.resolve(socket);
+    return new Promise((resolve, reject) => {
+      const removeListeners = () => {
+        socket.off('error', onceError);
+        socket.off('timeout', onceTimeout);
+      };
+      const onceError = (error) => {
+        removeListeners();
+        reject(error);
+      };
+      const onceTimeout = () => {
+        removeListeners();
+        reject(new Error('TIMEOUT ERROR: Syslog server TCP timeout'));
+      };
+      socket.write(msg, () => {
+        removeListeners();
+        resolve(msg);
+      });
+      socket.once('error', onceError);
+      socket.once('timeout', onceTimeout);
+    });
+  }
+
+  async tcpConnect(): Promise<net.Socket> {
     const net = require('net');
-    const dnsOptions = {
-      verbatim: true,
-    };
-    const result = await dnsPromises.lookup(this.target, dnsOptions);
     const tcpOptions = {
       host: this.target,
       port: this.port,
-      family: result.family,
     };
-    const client = net.createConnection(tcpOptions, () => {
-      // Turn msg in to a UTF8 buffer
-      let msgBuffer = Buffer.from(msg, 'utf8');
-      client.write(msgBuffer, () => {
-        client.end();
-      });
-    });
-    client.setTimeout(this.tcpTimeout);
     return new Promise((resolve, reject) => {
-      client.on('end', () => {
-        resolve(msg);
-      });
-      client.on('timeout', () => {
-        client.end();
-        reject(new Error('TIMEOUT ERROR: Syslog server TCP timeout'));
-      });
-      client.on('error', (error) => {
-        client.destroy();
+      const removeListeners = () => {
+        socket.off('error', onceError);
+        socket.off('timeout', onceTimeout);
+      };
+      const onceError = (error) => {
+        removeListeners();
         reject(error);
+      };
+      const onceTimeout = () => {
+        removeListeners();
+        reject(new Error('TIMEOUT ERROR: Syslog server TCP timeout'));
+      };
+      const socket = net.connect(tcpOptions, () => {
+        removeListeners();
+        resolve(socket);
+      });
+      socket.setTimeout(this.tcpTimeout);
+      socket.once('error', onceError);
+      socket.once('timeout', onceTimeout);
+      socket.on('close', () => {
+        this.onClose();
+      });
+      socket.on('end', () => {
+        this.emit('end');
+      });
+      socket.on('error', (error) => {
+        socket.destroy();
+        this.emit('error', error);
+      });
+      socket.on('timeout', () => {
+        socket.end();
+        this.emit('timeout');
       });
     });
   }
+
   /**
    * Send the Syslog message over TLS
    * @private
@@ -353,6 +437,34 @@ export class Syslog {
    * @throws {Error} - Network Error
    */
   async tlsMessage(msg) {
+    if (!this.tlsSocketPromise) {
+      this.tlsSocketPromise = this.tlsConnect();
+    }
+    const socket = await this.tlsSocketPromise;
+    this.tlsSocketPromise = Promise.resolve(socket);
+    return new Promise((resolve, reject) => {
+      const removeListeners = () => {
+        socket.off('error', onceError);
+        socket.off('timeout', onceTimeout);
+      };
+      const onceError = (error) => {
+        removeListeners();
+        reject(error);
+      };
+      const onceTimeout = () => {
+        removeListeners();
+        reject(new Error('TIMEOUT ERROR: Syslog server TLS timeout'));
+      };
+      socket.write(msg, () => {
+        removeListeners();
+        resolve(msg);
+      });
+      socket.once('error', onceError);
+      socket.once('timeout', onceTimeout);
+    });
+  }
+
+  async tlsConnect(): Promise<tls.TLSSocket> {
     const tls = require('tls');
     const tlsOptions: tls.ConnectionOptions = {
       host: this.target,
@@ -390,25 +502,39 @@ export class Syslog {
       tlsOptions.ca = tlsOptionsCerts;
     }
     tlsOptions.rejectUnauthorized = this.rejectUnauthorized;
-    const client = tls.connect(tlsOptions, () => {
-      // Turn msg in to a UTF8 buffer
-      let msgBuffer = Buffer.from(msg, 'utf8');
-      client.write(msgBuffer, () => {
-        client.end();
-      });
-    });
-    client.setTimeout(this.tcpTimeout);
     return new Promise((resolve, reject) => {
-      client.on('end', () => {
-        resolve(msg);
-      });
-      client.on('timeout', () => {
-        client.end();
-        reject(new Error('TIMEOUT ERROR: Syslog server TLS timeout'));
-      });
-      client.on('error', (error) => {
-        client.destroy();
+      const removeListeners = () => {
+        socket.off('error', onceError);
+        socket.off('timeout', onceTimeout);
+      };
+      const onceError = (error) => {
+        removeListeners();
         reject(error);
+      };
+      const onceTimeout = () => {
+        removeListeners();
+        reject(new Error('TIMEOUT ERROR: Syslog server TLS timeout'));
+      };
+      const socket = tls.connect(tlsOptions, () => {
+        removeListeners();
+        resolve(socket);
+      });
+      socket.setTimeout(this.tcpTimeout);
+      socket.once('error', onceError);
+      socket.once('timeout', onceTimeout);
+      socket.on('close', () => {
+        this.onClose();
+      });
+      socket.on('end', () => {
+        this.emit('end');
+      });
+      socket.on('error', (error) => {
+        socket.destroy();
+        this.emit('error', error);
+      });
+      socket.on('timeout', () => {
+        socket.end();
+        this.emit('timeout');
       });
     });
   }
@@ -425,7 +551,6 @@ export class Syslog {
     if (typeof msg !== 'string') {
       throw new Error('TYPE ERROR: Syslog message must be a string');
     }
-    this.protocol = this.protocol.toLowerCase();
     if (this.protocol === 'udp') {
       return this.udpMessage(msg);
     } else if (this.protocol === 'tcp') {
@@ -438,12 +563,68 @@ export class Syslog {
       throw new Error(errorMsg);
     }
   }
+
+  async close() {
+    if (this.tcpSocketPromise) {
+      let socket;
+      try {
+        socket = await this.tcpSocketPromise;
+      } catch (err) {
+        this.tcpSocketPromise = null;
+        return;
+      }
+      return new Promise((resolve) => {
+        socket.end(resolve);
+      });
+    }
+
+    if (this.tlsSocketPromise) {
+      let socket;
+      try {
+        socket = await this.tlsSocketPromise;
+      } catch (err) {
+        this.tlsSocketPromise = null;
+        return;
+      }
+      return new Promise((resolve) => {
+        socket.end(resolve);
+      });
+    }
+
+    if (this.udpSocketPromise) {
+      let socket;
+      try {
+        socket = await this.udpSocketPromise;
+      } catch (err) {
+        this.udpSocketPromise = null;
+        return;
+      }
+      return new Promise((resolve) => {
+        socket.close(resolve);
+      });
+    }
+  }
+
+  async onClose() {
+    this.tcpSocketPromise = null;
+    this.tlsSocketPromise = null;
+    this.udpSocketPromise = null;
+    this.emit('close');
+  }
+}
+
+abstract class Format {
+  server: Syslog;
+
+  async close() {
+    return this.server.close();
+  }
 }
 
 /**
  * The base class of RFC formartted syslog messages.
  */
-export class RFC {
+abstract class RFC extends Format {
   alertColor: number;
   criticalColor: number;
   emergencyColor: number;
@@ -616,7 +797,6 @@ export class RFC3164 extends RFC {
   color: boolean;
   facility: number;
   hostname: string;
-  server: Syslog;
   /**
    * Construct a new RFC3164 formatted Syslog object with user options
    * @public
@@ -678,13 +858,11 @@ export class RFC3164 extends RFC {
     } else {
       this.extendedColor = false;
     }
-    if (options.server) {
-      if (options.server instanceof Syslog) {
-        /** @private @type {Syslog} */
-        this.server = options.server;
-      } else {
-        this.server = new Syslog(options.server);
-      }
+    if (options.server instanceof Syslog) {
+      /** @private @type {Syslog} */
+      this.server = options.server;
+    } else {
+      this.server = new Syslog(options.server);
     }
     if (this.extendedColor) {
       /** @private @type {number} */
@@ -796,9 +974,6 @@ export class RFC3164 extends RFC {
    * @throws {Error} A standard error object
    */
   async send(msg, options) {
-    if (!this.server) {
-      this.server = new Syslog();
-    }
     const result = this.buildMessage(msg, options);
     return this.server.send(result);
   }
@@ -1024,7 +1199,6 @@ export class RFC5424 extends RFC {
   applicationName: string;
   color: boolean;
   hostname: string;
-  server: Syslog;
   timestamp: boolean;
   timestampMS: boolean;
   timestampTZ: boolean;
@@ -1105,13 +1279,11 @@ export class RFC5424 extends RFC {
     } else {
       this.extendedColor = false;
     }
-    if (options.server) {
-      if (options.server instanceof Syslog) {
-        /** @private @type {Syslog} */
-        this.server = options.server;
-      } else {
-        this.server = new Syslog(options.server);
-      }
+    if (options.server instanceof Syslog) {
+      /** @private @type {Syslog} */
+      this.server = options.server;
+    } else {
+      this.server = new Syslog(options.server);
     }
     if (this.extendedColor) {
       /** @private @type {number} */
@@ -1301,9 +1473,6 @@ export class RFC5424 extends RFC {
    * @throws {Error} A standard error object
    */
   async send(msg, options) {
-    if (!this.server) {
-      this.server = new Syslog();
-    }
     const result = this.buildMessage(msg, options);
     return this.server.send(result);
   }
@@ -1511,11 +1680,10 @@ type LEEFOptions = {
  * @version 0.0.0
  * @since 0.0.0
  */
-export class LEEF {
+export class LEEF extends Format {
   attributes: any;
   eventId: string;
   product: string;
-  server: Syslog;
   syslogHeader: boolean;
   vendor: string;
   version: string;
@@ -1541,6 +1709,7 @@ export class LEEF {
    *    from this class. @see SyslogPro~Syslog
    */
   constructor(options?: LEEFOptions) {
+    super();
     options = options || {};
     /** @type {string} */
     this.vendor = options.vendor || 'unknown';
@@ -1602,13 +1771,11 @@ export class LEEF {
       AttributeLimits: null,
       calCountryOrRegion: null,
     };
-    if (options.server) {
-      if (options.server instanceof Syslog) {
-        /** @private @type {Syslog} */
-        this.server = options.server;
-      } else {
-        this.server = new Syslog(options.server);
-      }
+    if (options.server instanceof Syslog) {
+      /** @private @type {Syslog} */
+      this.server = options.server;
+    } else {
+      this.server = new Syslog(options.server);
     }
   }
   /**
@@ -1638,15 +1805,9 @@ export class LEEF {
 
   /**
    * @public
-   * @param {Syslog} [options=false] - A {@link module:SyslogPro~Syslog|
-   *    Syslog server connection} that should be used to send messages directly
-   *    from this class. @see SyslogPro~Syslog
    */
   async send(options) {
     const result = this.buildMessage();
-    if (!this.server) {
-      this.server = new Syslog(options);
-    }
     return this.server.send(result);
   }
 }
@@ -1677,14 +1838,13 @@ type CEFOptions = {
  * @version 0.0.0
  * @since 0.0.0
  */
-export class CEF {
+export class CEF extends Format {
   deviceEventClassId: string;
   deviceProduct: string;
   deviceVendor: string;
   deviceVersion: string;
   extensions: any;
   name: string;
-  server: Syslog;
   severity: string;
   /**
    * Construct a new CEF formatting object with user options
@@ -1707,6 +1867,7 @@ export class CEF {
    *    from this class. @see SyslogPro~Syslog
    */
   constructor(options?: CEFOptions) {
+    super();
     options = options || {};
     /** @type {string} */
     this.deviceVendor = options.deviceVendor || 'Unknown';
@@ -1880,13 +2041,11 @@ export class CEF {
       sourceZoneExternalID: null,
       sourceZoneURI: null,
     };
-    if (options.server) {
-      if (options.server instanceof Syslog) {
-        /** @private @type {Syslog} */
-        this.server = options.server;
-      } else {
-        this.server = new Syslog(options.server as SyslogOptions);
-      }
+    if (options.server instanceof Syslog) {
+      /** @private @type {Syslog} */
+      this.server = options.server;
+    } else {
+      this.server = new Syslog(options.server as SyslogOptions);
     }
   }
   /**
@@ -3144,15 +3303,9 @@ export class CEF {
   }
   /**
    * @public
-   * @param {Syslog} [options=false] - A {@link module:SyslogPro~Syslog|
-   *    Syslog server connection} that should be used to send messages directly
-   *    from this class. @see SyslogPro~Syslog
    */
-  async send(options) {
+  async send() {
     const result = this.buildMessage();
-    if (!this.server) {
-      this.server = new Syslog(options);
-    }
     return this.server.send(result);
   }
 }
