@@ -462,6 +462,15 @@ describe('RFC5424 Class Tests', () => {
     });
     expect(result).toMatch(/^<190>1 \S+ \S+ - - - \[hi@32473 foo="1" bar="2"\]\[escape quoteCharacter="\\"" backslack="\\\\" closingBrace="\\]"\] BOMhello\n$/);
   });
+  test('RFC5424 BuildMessage with octet-counting', () => {
+    const rfc5424 = new SyslogPro.RFC5424({
+      server: {
+        protocol: 'tcp'
+      }
+    });
+    const result = rfc5424.buildMessage('hello');
+    expect(result).toMatch(/^\d+ <190>1/);
+  });
   test('RFC5424 SetColors', () => {
     let rfc5424 = new SyslogPro.RFC5424();
     const result = rfc5424.setColor({
@@ -791,6 +800,15 @@ describe('RFC3164 Class Tests', () => {
       applicationName: 'applicationName'
     });
     expect(result).toMatch(/^<190>[A-Z][a-z]{2} [ \d]\d \d{2}:\d{2}:\d{2} hostname applicationName hello\n$/);
+  });
+  test('RFC3164 BuildMessage with octet-counting', () => {
+    const rfc3164 = new SyslogPro.RFC3164({
+      server: {
+        protocol: 'tcp'
+      }
+    });
+    const result = rfc3164.buildMessage('hello');
+    expect(result).toMatch(/^\d+ <190>/);
   });
 });
 
