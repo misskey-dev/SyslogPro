@@ -335,7 +335,7 @@ describe('RFC5424 Class Tests', () => {
   test('RFC5424 BuildMessage with no message', () => {
     const rfc5424 = new SyslogPro.RFC5424({ hostname: '-' });
     const result = rfc5424.buildMessage();
-    expect(result).toMatch(/^<190>1 \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{1,3}[\+\-]\d{2}:\d{2} - - - - -\n$/);
+    expect(result).toMatch(/^<190>1 \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{1,3}Z - - - - -\n$/);
   });
   test('RFC5424 BuildMessage with Timestamp options', () => {
     let rfc5424 = new SyslogPro.RFC5424({
@@ -383,7 +383,7 @@ describe('RFC5424 Class Tests', () => {
       timestampMS: true,
     });
     result = rfc5424.buildMessage('hello');
-    resultMsg = /<190>1 \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{1,3}\+/;
+    resultMsg = /<190>1 \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{1,3}[\+\-]\d{2}:\d{2}/;
     expect(result).toMatch(resultMsg);
     rfc5424 = new SyslogPro.RFC5424({
       timestamp: true,
@@ -392,7 +392,7 @@ describe('RFC5424 Class Tests', () => {
       timestampMS: false,
     });
     result = rfc5424.buildMessage('hello');
-    resultMsg = /<190>1 \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+/;
+    resultMsg = /<190>1 \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[\+\-]\d{2}:\d{2}/;
     expect(result).toMatch(resultMsg);
     rfc5424 = new SyslogPro.RFC5424({
       timestamp: true,
@@ -419,7 +419,7 @@ describe('RFC5424 Class Tests', () => {
       timestampMS: true,
     });
     result = rfc5424.buildMessage('hello');
-    resultMsg = /<190>1 \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{1,3}\+/;
+    resultMsg = /<190>1 \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{1,3}Z/;
     expect(result).toMatch(resultMsg);
     rfc5424 = new SyslogPro.RFC5424({
       timestamp: true,
@@ -428,7 +428,7 @@ describe('RFC5424 Class Tests', () => {
       timestampMS: false,
     });
     result = rfc5424.buildMessage('hello');
-    resultMsg = /<190>1 \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+/;
+    resultMsg = /<190>1 \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/;
     expect(result).toMatch(resultMsg);
   });
   test('RFC5424 BuildMessage with Timestamp options to set date', () => {
@@ -440,7 +440,7 @@ describe('RFC5424 Class Tests', () => {
     });
     const timestamp = new Date('2020-01-01T01:23:45.678Z');
     const result = rfc5424.buildMessage('hello', { timestamp });
-    expect(result.startsWith('<190>1 2020-01-01T01:23:45.678+00:00 ')).toBe(true);
+    expect(result.startsWith('<190>1 2020-01-01T01:23:45.678Z ')).toBe(true);
   });
   test('RFC5424 BuildMessage with hostname and applicationName options', () => {
     const rfc5424 = new SyslogPro.RFC5424();
@@ -448,7 +448,7 @@ describe('RFC5424 Class Tests', () => {
       hostname: 'hostname',
       applicationName: 'applicationName'
     });
-    expect(result).toMatch(/^<190>1 \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{1,3}[\+\-]\d{2}:\d{2} hostname applicationName - - - BOMhello\n$/);
+    expect(result).toMatch(/^<190>1 \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{1,3}Z hostname applicationName - - - BOMhello\n$/);
   });
   test('RFC5424 BuildMessage with structredData option', () => {
     const rfc5424 = new SyslogPro.RFC5424();
