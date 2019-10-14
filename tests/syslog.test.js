@@ -332,6 +332,11 @@ describe('RFC5424 Class Tests', () => {
       expect(reason.message).toBe(errMsg);
     }
   });
+  test('RFC5424 BuildMessage with no message', () => {
+    const rfc5424 = new SyslogPro.RFC5424({ hostname: '-' });
+    const result = rfc5424.buildMessage();
+    expect(result).toMatch(/^<190>1 \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{1,3}[\+\-]\d{2}:\d{2} - - - - -\n$/);
+  });
   test('RFC5424 BuildMessage with Timestamp options', () => {
     let rfc5424 = new SyslogPro.RFC5424({
       color: true,
