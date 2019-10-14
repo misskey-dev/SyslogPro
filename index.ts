@@ -1329,7 +1329,7 @@ export class RFC5424 extends RFC {
   /**
    * Building a formatted message.  Returns a promise with a formatted message
    * @public
-   * @param {string} msg - The Syslog Message
+   * @param {?string} msg - The Syslog Message
    * @param {object} [options] - Options object
    * @param {number} [options.severity=7] - An array of structure
    * @param {number} [options.facility=23] - Facility code to use sending this
@@ -1353,7 +1353,7 @@ export class RFC5424 extends RFC {
     options = options || {};
     let severity = typeof options.severity === 'number' ?
       options.severity : 6;
-    if (typeof msg !== 'string' || options.severity > 7) {
+    if ((msg != null && typeof msg !== 'string') || options.severity > 7) {
       let errMsg = 'FORMAT ERROR: Syslog message must be a string';
       errMsg += ' msgSeverity must be a number between 0 and 7';
       throw new Error(errMsg);
@@ -1370,7 +1370,7 @@ export class RFC5424 extends RFC {
     // The PRI is common to both RFC formats
     const pri = (facility * 8) + severity;
     // Add requested color
-    if (this.color) {
+    if (this.color && msg) {
       options.msgColor = options.msgColor || 36;
       let colorCode = '[';
       if (this.extendedColor) {
@@ -1439,10 +1439,8 @@ export class RFC5424 extends RFC {
     fmtMsg += ' ' + pid;
     fmtMsg += ' ' + id;
     fmtMsg += ' ' + structuredData;
-    if (this.utf8BOM) {
-      fmtMsg += ' BOM' + msg;
-    } else {
-      fmtMsg += ' ' + msg;
+    if (msg) {
+      fmtMsg += ` ${this.utf8BOM ? 'BOM' : ''}${msg}`;
     }
     return this.octetCounting
       ? `${Buffer.byteLength(fmtMsg)} ${fmtMsg}`
@@ -1476,7 +1474,7 @@ export class RFC5424 extends RFC {
    *    class was created a default Syslog connector will be used.
    *    @see SyslogPro~Syslog
    * @public
-   * @param {string} msg - The unformatted Syslog message to send
+   * @param {?string} msg - The unformatted Syslog message to send
    * @returns {Promise} A Syslog formatted string according to the selected RFC
    * @throws {Error} A standard error object
    */
@@ -1487,7 +1485,7 @@ export class RFC5424 extends RFC {
   /**
    * Send a syslog message with a severity level of 0 (Emergency)
    * @public
-   * @param {string} msg - The emergency message to send to the Syslog server
+   * @param {?string} msg - The emergency message to send to the Syslog server
    * @returns {Promise} - The formatted syslog message sent to the Syslog server
    * @throws {Error} - Any bubbled-up error
    */
@@ -1500,7 +1498,7 @@ export class RFC5424 extends RFC {
   /**
    * Send a syslog message with a severity level of 0 (Emergency)
    * @public
-   * @param {string} msg - The emergency message to send to the Syslog server
+   * @param {?string} msg - The emergency message to send to the Syslog server
    * @returns {Promise} - The formatted syslog message sent to the Syslog server
    * @throws {Error} - Any bubbled-up error
    */
@@ -1510,7 +1508,7 @@ export class RFC5424 extends RFC {
   /**
    * Send a syslog message with a severity level of 1 (Alert)
    * @public
-   * @param {string} msg - The alert message to send to the Syslog server
+   * @param {?string} msg - The alert message to send to the Syslog server
    * @returns {Promise} - The formatted syslog message sent to the Syslog server
    * @throws {Error} - Any bubbled-up error
    */
@@ -1523,7 +1521,7 @@ export class RFC5424 extends RFC {
   /**
    * Send a syslog message with a severity level of 2 (Critical)
    * @public
-   * @param {string} msg - The critical message to send to the Syslog server
+   * @param {?string} msg - The critical message to send to the Syslog server
    * @returns {Promise} - The formatted syslog message sent to the Syslog server
    * @throws {Error} - Any bubbled-up error
    */
@@ -1536,7 +1534,7 @@ export class RFC5424 extends RFC {
   /**
    * Send a syslog message with a severity level of 2 (Critical)
    * @public
-   * @param {string} msg - The critical message to send to the Syslog server
+   * @param {?string} msg - The critical message to send to the Syslog server
    * @returns {Promise} - The formatted syslog message sent to the Syslog server
    * @throws {Error} - Any bubbled-up error
    */
@@ -1546,7 +1544,7 @@ export class RFC5424 extends RFC {
   /**
    * Send a syslog message with a severity level of 3 (Error)
    * @public
-   * @param {string} msg - The error message to send to the Syslog server
+   * @param {?string} msg - The error message to send to the Syslog server
    * @returns {Promise} - The formatted syslog message sent to the Syslog server
    * @throws {Error} - Any bubbled-up error
    */
@@ -1559,7 +1557,7 @@ export class RFC5424 extends RFC {
   /**
    * Send a syslog message with a severity level of 3 (Error)
    * @public
-   * @param {string} msg - The error message to send to the Syslog server
+   * @param {?string} msg - The error message to send to the Syslog server
    * @returns {Promise} - The formatted syslog message sent to the Syslog server
    * @throws {Error} - Any bubbled-up error
    */
@@ -1569,7 +1567,7 @@ export class RFC5424 extends RFC {
   /**
    * Send a syslog message with a severity level of 4 (Warning)
    * @public
-   * @param {string} msg - The warning message to send to the Syslog server
+   * @param {?string} msg - The warning message to send to the Syslog server
    * @returns {Promise} - The formatted syslog message sent to the Syslog server
    * @throws {Error} - Any bubbled-up error
    */
@@ -1582,7 +1580,7 @@ export class RFC5424 extends RFC {
   /**
    * Send a syslog message with a severity level of 4 (Warning)
    * @public
-   * @param {string} msg - The warning message to send to the Syslog server
+   * @param {?string} msg - The warning message to send to the Syslog server
    * @returns {Promise} - The formatted syslog message sent to the Syslog server
    * @throws {Error} - Any bubbled-up error
    */
@@ -1592,7 +1590,7 @@ export class RFC5424 extends RFC {
   /**
    * Send a syslog message with a severity level of 5 (Notice)
    * @public
-   * @param {string} msg - The notice message to send to the Syslog server
+   * @param {?string} msg - The notice message to send to the Syslog server
    * @returns {Promise} - The formatted syslog message sent to the Syslog server
    * @throws {Error} - Any bubbled-up error
    */
@@ -1605,7 +1603,7 @@ export class RFC5424 extends RFC {
   /**
    * Send a syslog message with a severity level of 5 (Notice)
    * @public
-   * @param {string} msg - The notice message to send to the Syslog server
+   * @param {?string} msg - The notice message to send to the Syslog server
    * @returns {Promise} - The formatted syslog message sent to the Syslog server
    * @throws {Error} - Any bubbled-up error
    */
@@ -1615,7 +1613,7 @@ export class RFC5424 extends RFC {
   /**
    * Send a syslog message with a severity level of 6 (Informational)
    * @public
-   * @param {string} msg - The informational message to send to the Syslog
+   * @param {?string} msg - The informational message to send to the Syslog
    *    server
    * @returns {Promise} - The formatted syslog message sent to the Syslog server
    * @throws {Error} - Any bubbled-up error
@@ -1629,7 +1627,7 @@ export class RFC5424 extends RFC {
   /**
    * Send a syslog message with a severity level of 6 (Informational)
    * @public
-   * @param {string} msg - The informational message to send to the Syslog
+   * @param {?string} msg - The informational message to send to the Syslog
    *    server
    * @returns {Promise} - The formatted syslog message sent to the Syslog server
    * @throws {Error} - Any bubbled-up error
@@ -1640,7 +1638,7 @@ export class RFC5424 extends RFC {
   /**
    * Send a syslog message with a severity level of 6 (Informational)
    * @public
-   * @param {string} msg - The informational message to send to the Syslog
+   * @param {?string} msg - The informational message to send to the Syslog
    *    server
    * @returns {Promise} - The formatted syslog message sent to the Syslog server
    * @throws {Error} - Any bubbled-up error
@@ -1651,7 +1649,7 @@ export class RFC5424 extends RFC {
   /**
    * Send a syslog message with a severity level of 7 (Debug)
    * @public
-   * @param {string} msg - The debug message to send to the Syslog server
+   * @param {?string} msg - The debug message to send to the Syslog server
    * @returns {Promise} - The formatted syslog message sent to the Syslog server
    * @throws {Error} - Any bubbled-up error
    */
