@@ -1390,9 +1390,7 @@ export class RFC5424 extends RFC {
       if (this.timestampUTC) {
         if (this.timestampMS) {
           if (this.timestampTZ) {
-            timestamp = moment(options.timestamp)
-              .utc()
-              .format('YYYY-MM-DDThh:mm:ss.SSSZ');
+            timestamp = moment(options.timestamp).toISOString();
           } else {
             timestamp = moment(options.timestamp)
               .utc()
@@ -1402,7 +1400,7 @@ export class RFC5424 extends RFC {
           if (this.timestampTZ) {
             timestamp = moment(options.timestamp)
               .utc()
-              .format('YYYY-MM-DDThh:mm:ssZ');
+              .format('YYYY-MM-DDThh:mm:ss[Z]');
           } else {
             timestamp = moment(options.timestamp)
               .utc()
