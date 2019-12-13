@@ -306,12 +306,12 @@ export class Syslog extends EventEmitter {
    * @returns {Promise} - The Syslog formatted string sent
    * @throws {Error} - Network Error
    */
-  async udpMessage(msg) {
+  async udpMessage(msg: string) {
     if (!this.udpSocketPromise) {
       this.udpSocketPromise = this.udpConnect();
     }
     const socket = await this.udpSocketPromise;
-    return new Promise((resolve, reject) => {
+    return new Promise<string>((resolve, reject) => {
       // @ts-ignore
       socket.send(msg, (err) => {
         if (err) {
@@ -357,12 +357,12 @@ export class Syslog extends EventEmitter {
    * @throws {Error} - Timeout error for TCP and TLS connections
    * @throws {Error} - Network Error
    */
-  async tcpMessage(msg) {
+  async tcpMessage(msg: string) {
     if (!this.tcpSocketPromise) {
       this.tcpSocketPromise = this.tcpConnect();
     }
     const socket = await this.tcpSocketPromise;
-    return new Promise((resolve, reject) => {
+    return new Promise<string>((resolve, reject) => {
       const removeListeners = () => {
         socket.off('error', onceError);
         socket.off('timeout', onceTimeout);
@@ -435,12 +435,12 @@ export class Syslog extends EventEmitter {
    * @throws {Error} - Timeout error for TCP and TLS connections
    * @throws {Error} - Network Error
    */
-  async tlsMessage(msg) {
+  async tlsMessage(msg: string) {
     if (!this.tlsSocketPromise) {
       this.tlsSocketPromise = this.tlsConnect();
     }
     const socket = await this.tlsSocketPromise;
-    return new Promise((resolve, reject) => {
+    return new Promise<string>((resolve, reject) => {
       const removeListeners = () => {
         socket.off('error', onceError);
         socket.off('timeout', onceTimeout);
@@ -545,7 +545,7 @@ export class Syslog extends EventEmitter {
    * @throws {Error} - Timeout error for TCP and TLS connections
    * @throws {Error} - Network Error
    */
-  async send(msg) {
+  async send(msg: string) {
     if (typeof msg !== 'string') {
       throw new Error('TYPE ERROR: Syslog message must be a string');
     }
@@ -571,7 +571,7 @@ export class Syslog extends EventEmitter {
         this.tcpSocketPromise = null;
         return;
       }
-      return new Promise((resolve) => {
+      return new Promise<void>((resolve) => {
         socket.end(resolve);
       });
     }
@@ -584,7 +584,7 @@ export class Syslog extends EventEmitter {
         this.tlsSocketPromise = null;
         return;
       }
-      return new Promise((resolve) => {
+      return new Promise<void>((resolve) => {
         socket.end(resolve);
       });
     }
@@ -597,7 +597,7 @@ export class Syslog extends EventEmitter {
         this.udpSocketPromise = null;
         return;
       }
-      return new Promise((resolve) => {
+      return new Promise<void>((resolve) => {
         socket.close(resolve);
       });
     }
