@@ -1452,9 +1452,11 @@ export class RFC5424 extends RFC {
         return '[' + [
           sdId,
           ...Object.entries(sdParam)
-            .map(([name, value]) =>
-              `${name}="${RFC5424.escapeParamValue(value)}"`
-            ),
+            .reduce((array, [name, value]) => [
+              ...array,
+              ...(Array.isArray(value) ? value : [value])
+                .map((v) => `${name}="${RFC5424.escapeParamValue(v)}"`),
+            ], []),
         ].join(' ') + ']';
       }).join('');
     }

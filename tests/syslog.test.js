@@ -456,7 +456,7 @@ describe('RFC5424 Class Tests', () => {
       structuredData: {
         "hi@32473": {
           foo: 1,
-          bar: 2
+          bar: [2, 3]
         },
         escape: {
           quoteCharacter: '"',
@@ -465,7 +465,7 @@ describe('RFC5424 Class Tests', () => {
         }
       }
     });
-    expect(result).toMatch(/^<190>1 \S+ \S+ - - - \[hi@32473 foo="1" bar="2"\]\[escape quoteCharacter="\\"" backslack="\\\\" closingBrace="\\]"\] BOMhello\n$/);
+    expect(result).toMatch(/^<190>1 \S+ \S+ - - - \[hi@32473 foo="1" bar="2" bar="3"\]\[escape quoteCharacter="\\"" backslack="\\\\" closingBrace="\\]"\] BOMhello\n$/);
   });
   test('RFC5424 BuildMessage with octet-counting', () => {
     const rfc5424 = new SyslogPro.RFC5424({
