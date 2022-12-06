@@ -74,6 +74,3 @@ typings/
 
 # Test files
 run.js
-
-index.js
-*.d.ts
